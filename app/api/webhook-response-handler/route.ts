@@ -4,18 +4,28 @@ export async function POST(req: NextRequest) {
   try {
     console.log("=== Webhook Response Handler Started ===")
 
-    // Parse the incoming JSON data
-    const webhookData = await req.json()
+    const contentType = req.headers.get("content-type") || ""
+    let dataString = ""
 
-    // Check if the data field exists
-    if (!webhookData.data) {
-      console.error("No data field found in webhook response")
-      return NextResponse.json({ error: "No data field in webhook response" }, { status: 400 })
+    // If the webhook sent JSON we can parse it directly
+    if (contentType.includes("application/json")) {
+      const webhookData = await req.json()
+
+      if (!webhookData.data) {
+        console.error("No data field found in webhook response")
+        return NextResponse.json({ error: "No data field in webhook response" }, { status: 400 })
+      }
+
+      dataString = webhookData.data.toString()
+    } else {
+      // Otherwise assume raw text/binary and convert to string for metadata extraction
+      const buffer = Buffer.from(await req.arrayBuffer())
+      dataString = buffer.toString()
+      console.log(`Received ${buffer.length} bytes of data from webhook`)
     }
 
-    // Extract file metadata from the data field
-    // Example format: "data File Name: File.xlsx File Extension: xlsx Mime Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet File Size: 19.9 kB"
-    const dataString = webhookData.data.toString()
+    // Extract file metadata from the data string
+    // Example format: "File Name: File.xlsx File Extension: xlsx Mime Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet File Size: 19.9 kB"
 
     // Extract file information using regex
     const fileNameMatch = dataString.match(/File Name: ([^\n]+)/)
@@ -67,4 +77,16 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     )
   }
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token",
+      "Access-Control-Max-Age": "86400",
+    },
+  })
 }
