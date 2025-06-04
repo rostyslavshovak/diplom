@@ -1,34 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { storeFile } from "@/lib/receivedFiles"
+import { randomUUID } from "crypto"
 
 export async function POST(req: NextRequest) {
   try {
     console.log("=== Webhook Response Handler Started ===")
 
-    // Parse the incoming JSON data
-    const webhookData = await req.json()
+    const jobId = req.headers.get("x-job-id") || randomUUID()
+    const fileNameHeader = req.headers.get("x-file-name")
+    const mimeType = req.headers.get("content-type") || "application/octet-stream"
 
-    // Check if the data field exists
-    if (!webhookData.data) {
-      console.error("No data field found in webhook response")
-      return NextResponse.json({ error: "No data field in webhook response" }, { status: 400 })
+    // Read the binary body
+    const arrayBuffer = await req.arrayBuffer()
+
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      console.error("Received empty body from webhook")
+      return NextResponse.json({ error: "Empty body received" }, { status: 400 })
     }
 
-    // Extract file metadata from the data field
-    // Example format: "data File Name: File.xlsx File Extension: xlsx Mime Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet File Size: 19.9 kB"
-    const dataString = webhookData.data.toString()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // Extract file metadata from headers if available
+    const dataString = Buffer.from(arrayBuffer.slice(0, 200)).toString()
 
     // Extract file information using regex
     const fileNameMatch = dataString.match(/File Name: ([^\n]+)/)
     const fileExtMatch = dataString.match(/File Extension: ([^\n]+)/)
-    const mimeTypeMatch = dataString.match(/Mime Type: ([^\n]+)/)
-    const fileSizeMatch = dataString.match(/File Size: ([^\n]+)/)
+    const headerFileName = fileNameHeader ? decodeURIComponent(fileNameHeader) : null
 
-    const fileName = fileNameMatch ? fileNameMatch[1].trim() : "processed-file.xlsx"
-    const fileExt = fileExtMatch ? fileExtMatch[1].trim() : "xlsx"
-    const mimeType = mimeTypeMatch
-      ? mimeTypeMatch[1].trim()
-      : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    const fileSize = fileSizeMatch ? fileSizeMatch[1].trim() : "Unknown"
+    const fileName = headerFileName || (fileNameMatch ? fileNameMatch[1].trim() : `file-${jobId}`)
+    const fileExt = fileExtMatch ? fileExtMatch[1].trim() : fileName.split(".").pop() || ""
+    const fileSize = buffer.byteLength.toString()
 
     console.log("Extracted file metadata:", {
       fileName,
@@ -37,16 +39,15 @@ export async function POST(req: NextRequest) {
       fileSize,
     })
 
-    // In a real implementation, you would extract the binary data from the webhook response
-    // For this example, we'll create a simple XLSX-like binary data
-    // In a production environment, you would need to properly extract the binary data from the webhook response
+    // Store the binary file for later download
+    storeFile(jobId, buffer, fileName, mimeType)
 
-    // Store the processed file information for later retrieval
     const processedFileInfo = {
       fileName,
       fileExt,
       mimeType,
       fileSize,
+      jobId,
       timestamp: new Date().toISOString(),
     }
 

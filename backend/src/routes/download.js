@@ -1,4 +1,5 @@
 import fetch from "node-fetch"
+import { getFile, deleteFile } from "../utils/receivedFiles.js"
 
 export default async function (fastify, opts) {
   fastify.get("/download-binary", async (request, reply) => {
@@ -13,6 +14,22 @@ export default async function (fastify, opts) {
       const requestedFilename = request.query.filename || "processed-file"
 
       fastify.log.info("Binary download request:", { webhookUrl, jobId, requestedFilename })
+
+      if (jobId) {
+        const stored = getFile(jobId)
+        if (stored) {
+          fastify.log.info("Serving file from in-memory store")
+          deleteFile(jobId)
+          reply.header("Content-Type", stored.mimeType)
+          reply.header("Content-Disposition", `attachment; filename="${stored.fileName}"`)
+          reply.header("Content-Length", stored.data.length.toString())
+          reply.header("Cache-Control", "no-cache, no-store, must-revalidate")
+          reply.header("Pragma", "no-cache")
+          reply.header("Expires", "0")
+          reply.header("X-Download-Source", "webhook-cache")
+          return reply.send(stored.data)
+        }
+      }
 
       // Check if we're in preview mode
       const isPreviewMode = process.env.NODE_ENV === "development" || !process.env.N8N_WEBHOOK_URL

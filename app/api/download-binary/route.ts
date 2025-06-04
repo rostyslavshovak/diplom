@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getFile, deleteFile } from "@/lib/receivedFiles"
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,10 +10,30 @@ export async function GET(req: NextRequest) {
       process.env.N8N_WEBHOOK_URL ||
       "https://n8n-lab.web-magic.space/webhook/549264d6-e71f-4bf3-b459-1fbc91c3e2d0"
 
-    const jobId = searchParams.get("jobId")
-    const requestedFilename = searchParams.get("filename") || "processed-file"
+  const jobId = searchParams.get("jobId")
+  const requestedFilename = searchParams.get("filename") || "processed-file"
 
-    console.log("Binary download request:", { webhookUrl, jobId, requestedFilename })
+  console.log("Binary download request:", { webhookUrl, jobId, requestedFilename })
+
+  if (jobId) {
+    const stored = getFile(jobId)
+    if (stored) {
+      console.log("Serving file from in-memory store")
+      const res = new NextResponse(stored.data, {
+        headers: {
+          "Content-Type": stored.mimeType,
+          "Content-Disposition": `attachment; filename=\"${stored.fileName}\"`,
+          "Content-Length": stored.data.length.toString(),
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Download-Source": "webhook-cache",
+        },
+      })
+      deleteFile(jobId)
+      return res
+    }
+  }
 
     // Check if we're in preview mode
     const isPreviewMode =
