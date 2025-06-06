@@ -1,9 +1,7 @@
 class ChatApp {
   constructor() {
-    this.websocket = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 1000;
+    this.webhookUrl =
+      'https://n8n-lab.web-magic.space/webhook/2ab88b52-1566-44cc-98cb-d76917bdf022/chat';
     this.isConnecting = false;
     this.messageHistory = [];
     this.maxHistorySize = 100;
@@ -53,7 +51,7 @@ class ChatApp {
     
     // Window focus/blur for connection management
     window.addEventListener('focus', () => {
-      if (this.websocket?.readyState === WebSocket.CLOSED) {
+      if (!this.isConnecting) {
         this.connect();
       }
     });
@@ -76,131 +74,41 @@ class ChatApp {
   }
 
   connect() {
-    if (this.isConnecting || (this.websocket && this.websocket.readyState === WebSocket.CONNECTING)) {
+    if (this.isConnecting) {
       return;
     }
 
     this.isConnecting = true;
     this.updateConnectionStatus('connecting', 'Connecting...');
-    
-    try {
-      // Note: The provided URL appears to be an HTTP webhook, not a WebSocket endpoint
-      // For demonstration, we'll create a WebSocket connection to a mock endpoint
-      // In production, you'd need to ensure the n8n webhook supports WebSocket connections
-      
-      const wsUrl = 'wss://echo.websocket.org/'; // Mock WebSocket for demonstration
-      this.websocket = new WebSocket(wsUrl);
-      
-      this.websocket.onopen = (event) => {
-        console.log('WebSocket connected:', event);
-        this.onOpen();
-      };
-      
-      this.websocket.onmessage = (event) => {
-        console.log('WebSocket message:', event.data);
-        this.onMessage(event);
-      };
-      
-      this.websocket.onclose = (event) => {
-        console.log('WebSocket closed:', event);
-        this.onClose(event);
-      };
-      
-      this.websocket.onerror = (event) => {
-        console.error('WebSocket error:', event);
-        this.onError(event);
-      };
-      
-    } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
-      this.onError({ error });
-    }
-  }
 
-  onOpen() {
-    this.isConnecting = false;
-    this.reconnectAttempts = 0;
-    this.updateConnectionStatus('connected', 'Connected');
-    this.hideStatusModal();
-    
-    // Send initial connection message
-    this.sendSystemMessage({
-      type: 'connection',
-      userId: this.userId,
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  onMessage(event) {
-    try {
-      const data = JSON.parse(event.data);
-      this.handleIncomingMessage(data);
-    } catch (error) {
-      // Handle plain text messages
-      this.handleIncomingMessage({
-        type: 'message',
-        text: event.data,
-        userId: 'system',
-        timestamp: new Date().toISOString()
+    fetch(this.webhookUrl, { method: 'GET' })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        this.updateConnectionStatus('connected', 'Connected');
+      })
+      .catch((err) => {
+        console.error('Connection error:', err);
+        this.updateConnectionStatus('disconnected', 'Connection Error');
+      })
+      .finally(() => {
+        this.isConnecting = false;
       });
-    }
   }
 
-  onClose(event) {
-    this.isConnecting = false;
-    this.updateConnectionStatus('disconnected', 'Disconnected');
-    
-    if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.attemptReconnect();
-    }
-  }
 
-  onError(event) {
-    this.isConnecting = false;
-    console.error('WebSocket error:', event);
-    this.updateConnectionStatus('disconnected', 'Connection Error');
-    
-    this.showStatusModal(
-      '<div class="text-red-500 mb-4">⚠️</div>' +
-      '<p class="text-gray-700 mb-4">Connection failed. Retrying...</p>' +
-      '<button onclick="chatApp.connect()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Retry Now</button>'
-    );
-  }
-
-  attemptReconnect() {
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    
-    this.updateConnectionStatus('connecting', `Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-    
-    setTimeout(() => {
-      if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-        this.connect();
-      } else {
-        this.updateConnectionStatus('disconnected', 'Connection Failed');
-        this.showStatusModal(
-          '<div class="text-red-500 mb-4">❌</div>' +
-          '<p class="text-gray-700 mb-4">Unable to connect after multiple attempts.</p>' +
-          '<button onclick="chatApp.connect(); chatApp.reconnectAttempts = 0;" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Try Again</button>'
-        );
-      }
-    }, delay);
-  }
-
-  sendMessage() {
+  async sendMessage() {
     const message = this.messageInput.value.trim();
-    
-    if (!message || message.length === 0) {
+
+    if (!message) {
       return;
     }
-    
+
     if (message.length > 500) {
-      this.showStatusModal('<div class="text-red-500 mb-4">⚠️</div><p class="text-gray-700">Message too long. Please keep it under 500 characters.</p>');
-      return;
-    }
-    
-    if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
-      this.showStatusModal('<div class="text-orange-500 mb-4">⚠️</div><p class="text-gray-700">Not connected. Please wait for connection to be established.</p>');
+      this.showStatusModal(
+        '<div class="text-red-500 mb-4">⚠️</div><p class="text-gray-700">Message too long. Please keep it under 500 characters.</p>'
+      );
       return;
     }
 
@@ -211,34 +119,58 @@ class ChatApp {
       timestamp: new Date().toISOString()
     };
 
+    // Add to UI immediately
+    this.addMessage(messageData, true);
+    this.saveMessageToHistory(messageData);
+
     try {
-      // Send to WebSocket
-      this.websocket.send(JSON.stringify(messageData));
-      
-      // Add to local UI immediately
-      this.addMessage(messageData, true);
-      
-      // Clear input
-      this.messageInput.value = '';
-      this.updateCharacterCount();
-      
-      // Save to history
-      this.saveMessageToHistory(messageData);
-      
+      const response = await fetch(this.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(messageData)
+      });
+
+      let replyText = await response.text();
+      try {
+        const json = JSON.parse(replyText);
+        if (json.message) {
+          replyText = json.message;
+        } else {
+          replyText = JSON.stringify(json);
+        }
+      } catch (_) {
+        // plain text response
+      }
+
+      if (replyText) {
+        const reply = {
+          type: 'message',
+          text: replyText,
+          userId: 'server',
+          timestamp: new Date().toISOString()
+        };
+        this.addMessage(reply, false);
+        this.saveMessageToHistory(reply);
+      }
     } catch (error) {
       console.error('Failed to send message:', error);
-      this.showStatusModal('<div class="text-red-500 mb-4">❌</div><p class="text-gray-700">Failed to send message. Please try again.</p>');
+      this.showStatusModal(
+        '<div class="text-red-500 mb-4">❌</div><p class="text-gray-700">Failed to send message. Please try again.</p>'
+      );
     }
+
+    this.messageInput.value = '';
+    this.updateCharacterCount();
   }
 
   sendSystemMessage(data) {
-    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-      try {
-        this.websocket.send(JSON.stringify(data));
-      } catch (error) {
-        console.error('Failed to send system message:', error);
-      }
-    }
+    fetch(this.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).catch((error) => {
+      console.error('Failed to send system message:', error);
+    });
   }
 
   handleIncomingMessage(data) {
@@ -356,10 +288,7 @@ class ChatApp {
   }
 
   disconnect() {
-    if (this.websocket) {
-      this.websocket.close();
-      this.websocket = null;
-    }
+    // Nothing to clean up for HTTP webhook
   }
 }
 
