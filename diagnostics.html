@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhook Diagnostics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .diagnostic-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .status-success { color: #10b981; }
+        .status-error { color: #ef4444; }
+        .status-warning { color: #f59e0b; }
+        .status-info { color: #3b82f6; }
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <!-- Header -->
+        <div class="diagnostic-card rounded-2xl p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Webhook Diagnostics</h1>
+            <p class="text-gray-600">Testing endpoint: <code class="bg-gray-100 px-2 py-1 rounded text-sm">https://n8n-lab.web-magic.space/webhook/2ab88b52-1566-44cc-98cb-d76917bdf022/chat</code></p>
+        </div>
+
+        <!-- Test Results -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Basic Connectivity -->
+            <div class="diagnostic-card rounded-2xl p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">🔗 Basic Connectivity</h2>
+                <div id="connectivityResults" class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span>Testing endpoint...</span>
+                        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HTTP Methods -->
+            <div class="diagnostic-card rounded-2xl p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">📡 HTTP Methods</h2>
+                <div id="methodResults" class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span>Testing methods...</span>
+                        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SSL/TLS Check -->
+            <div class="diagnostic-card rounded-2xl p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">🔒 SSL/TLS Certificate</h2>
+                <div id="sslResults" class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span>Checking certificate...</span>
+                        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WebSocket Support -->
+            <div class="diagnostic-card rounded-2xl p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">⚡ WebSocket Support</h2>
+                <div id="websocketResults" class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span>Testing WebSocket...</span>
+                        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Analysis -->
+        <div class="diagnostic-card rounded-2xl p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📊 Detailed Analysis</h2>
+            <div id="detailedResults" class="space-y-4">
+                <div class="text-center text-gray-500">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                    <p>Running comprehensive diagnostics...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="diagnostic-card rounded-2xl p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">💡 Recommendations</h2>
+            <div id="recommendations" class="space-y-4">
+                <p class="text-gray-600">Recommendations will appear after diagnostics complete...</p>
+            </div>
+        </div>
+
+        <!-- Test Controls -->
+        <div class="diagnostic-card rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">🧪 Manual Testing</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Test Message</label>
+                    <textarea 
+                        id="testMessage" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows="3"
+                        placeholder='{"message": "Hello from diagnostics", "user": "test_user"}'
+                    >{"message": "Hello from diagnostics", "user": "test_user", "timestamp": "2024-01-01T12:00:00Z"}</textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">HTTP Method</label>
+                    <select id="testMethod" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4">
+                        <option value="POST">POST</option>
+                        <option value="GET">GET</option>
+                        <option value="PUT">PUT</option>
+                        <option value="PATCH">PATCH</option>
+                    </select>
+                    <button 
+                        id="manualTest" 
+                        class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                        Send Test Message
+                    </button>
+                </div>
+            </div>
+            <div id="manualTestResults" class="mt-4 p-4 bg-gray-50 rounded-lg hidden">
+                <h3 class="font-medium text-gray-800 mb-2">Test Results:</h3>
+                <pre id="manualTestOutput" class="code-block p-3 rounded text-sm overflow-x-auto"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="diagnostics.js"></script>
+</body>
+</html>
