@@ -29,7 +29,17 @@ class ChatApp {
   }
 
   generateUserId() {
-    return 'user_' + Math.random().toString(36).substr(2, 9);
+    const stored = localStorage.getItem('userId');
+    if (stored) {
+      return stored;
+    }
+    const id = 'user_' + Math.random().toString(36).substr(2, 9);
+    try {
+      localStorage.setItem('userId', id);
+    } catch (_) {
+      // ignore storage errors
+    }
+    return id;
   }
 
   setupEventListeners() {
@@ -135,6 +145,8 @@ class ChatApp {
         const json = JSON.parse(replyText);
         if (json.message) {
           replyText = json.message;
+        } else if (json.output) {
+          replyText = json.output;
         } else {
           replyText = JSON.stringify(json);
         }
@@ -194,7 +206,12 @@ class ChatApp {
     
     const textDiv = document.createElement('div');
     textDiv.className = 'text-sm leading-relaxed';
-    textDiv.textContent = messageData.text;
+    if (window.marked && window.DOMPurify) {
+      const html = marked.parse(messageData.text || '');
+      textDiv.innerHTML = DOMPurify.sanitize(html);
+    } else {
+      textDiv.textContent = messageData.text;
+    }
     
     const timeDiv = document.createElement('div');
     timeDiv.className = 'text-xs mt-1 opacity-75';
